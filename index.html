@@ -142,6 +142,9 @@
         
         let selectedFile = null;
 
+        // 全局轮询计时器变量
+        let pollTimer = null;
+
         // 点击上传区域触发文件选择
         uploadArea.addEventListener('click', () => {
             fileInput.click();
@@ -350,6 +353,81 @@
                         longRunningNoticeShown = true;
                     }
                     
+                    // 添加手动检查按钮
+                    if (attempts >= 15 && !document.getElementById('manual-check-btn')) {
+                        // 创建手动检查按钮
+                        const checkButton = document.createElement('button');
+                        checkButton.id = 'manual-check-btn';
+                        checkButton.className = 'btn';
+                        checkButton.style.marginTop = '10px';
+                        checkButton.innerText = '手动检查任务状态';
+                        checkButton.onclick = async function() {
+                            try {
+                                checkButton.disabled = true;
+                                checkButton.innerText = '正在检查...';
+                                
+                                // 直接调用状态检查API
+                                const response = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`);
+                                
+                                if (!response.ok) {
+                                    throw new Error(`服务器返回错误: ${response.status}`);
+                                }
+                                
+                                const data = await response.json();
+                                console.log('手动检查结果:', data);
+                                
+                                // 显示详细状态信息
+                                let statusInfo = `当前状态: ${data.status}\n创建时间: ${new Date(data.created).toLocaleString()}`;
+                                
+                                if (data.updated) {
+                                    statusInfo += `\n更新时间: ${new Date(data.updated).toLocaleString()}`;
+                                }
+                                
+                                if (data.completed) {
+                                    statusInfo += `\n完成时间: ${new Date(data.completed).toLocaleString()}`;
+                                }
+                                
+                                if (data.status === 'completed' && data.resultUrl) {
+                                    // 直接显示结果
+                                    showStatus('图片生成成功！', 'success');
+                                    resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片">
+                                                            <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a></p>`;
+                                    uploadBtn.disabled = false;
+                                    
+                                    // 清除轮询
+                                    clearTimeout(pollTimer);
+                                    
+                                    // 移除按钮
+                                    checkButton.remove();
+                                } else {
+                                    alert(statusInfo);
+                                    checkButton.disabled = false;
+                                    checkButton.innerText = '手动检查任务状态';
+                                    
+                                    // 尝试恢复任务
+                                    if (data.status === 'processing' || data.status === 'pending') {
+                                        const recoverResponse = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/recover/${taskId}`);
+                                        const recoverData = await recoverResponse.json();
+                                        console.log('恢复响应:', recoverData);
+                                        
+                                        if (recoverData.status === 'recovering') {
+                                            showStatus('正在尝试恢复任务，请继续等待...', 'loading');
+                                        }
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('手动检查错误:', error);
+                                alert('检查失败: ' + error.message);
+                                checkButton.disabled = false;
+                                checkButton.innerText = '手动检查任务状态';
+                            }
+                        };
+                        
+                        // 添加到UI中
+                        const statusArea = document.getElementById('status').parentNode;
+                        statusArea.appendChild(checkButton);
+                    }
+                    
                     const response = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`);
                     
                     if (!response.ok) {
@@ -466,7 +544,7 @@
                     // 使用递增的间隔（从3秒增加到最多10秒）
                     const adaptiveInterval = Math.min(pollInterval * (1 + attempts/10), 10000);
                     console.log(`计划${adaptiveInterval/1000}秒后进行下一次检查`);
-                    setTimeout(checkStatus, adaptiveInterval);
+                    pollTimer = setTimeout(checkStatus, adaptiveInterval);
                 } else {
                     showStatus('任务超时，请重试', 'error');
                     uploadBtn.disabled = false;
