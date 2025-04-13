@@ -82,6 +82,24 @@
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+        .ai-response-box {
+            width: 100%;
+            margin-top: 20px;
+            text-align: left;
+        }
+        .ai-response-textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            resize: vertical;
+        }
         .status {
             margin-top: 20px;
             padding: 10px;
@@ -123,9 +141,13 @@
                 <div id="original-preview"></div>
             </div>
             <div class="preview-box">
-                <h3>吉卜力风格图片</h3>
+                <h3>吉卜力风格处理</h3>
                 <div id="result-preview"></div>
             </div>
+        </div>
+        <div class="ai-response-box">
+            <h3>AI响应原始内容</h3>
+            <textarea id="ai-response-content" class="ai-response-textarea" readonly></textarea>
         </div>
     </div>
     <footer>
@@ -139,6 +161,7 @@
         const originalPreview = document.getElementById('original-preview');
         const resultPreview = document.getElementById('result-preview');
         const statusDiv = document.getElementById('status');
+        const aiResponseContent = document.getElementById('ai-response-content');
         
         let selectedFile = null;
 
@@ -395,30 +418,17 @@
                             statusInfo += `\n完成时间: ${new Date(data.completed).toLocaleString()}`;
                         }
                         
-                        if (data.status === 'completed' && data.resultUrl) {
-                            // 添加URL检查
-                            try {
-                                // 检查URL是否可访问
-                                const urlCheck = await fetch(data.resultUrl, { method: 'HEAD' })
-                                    .catch(e => {
-                                        console.warn('图片URL检查失败:', e);
-                                        return { ok: false };
-                                    });
-                                    
-                                if (!urlCheck.ok) {
-                                    console.warn('图片URL无法访问:', data.resultUrl);
-                                    alert('警告: 图片URL可能无法访问，将尝试显示。\n' + statusInfo);
-                                }
-                            } catch (urlError) {
-                                console.warn('检查图片URL时出错:', urlError);
-                            }
+                        if (data.status === 'completed' && data.originalContent) {
+                            // 显示AI原始响应内容
+                            showStatus('AI响应内容获取成功！', 'success');
                             
-                            // 直接显示结果
-                            showStatus('图片生成成功！', 'success');
-                            resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片"
-                                                   onerror="this.onerror=null;this.src='';this.alt='图片加载失败';alert('图片加载失败，URL可能无效');">
-                                                <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a>
-                                                <br><span style="font-size:12px;word-break:break-all;">图片链接: ${data.resultUrl}</span></p>`;
+                            // 填充文本区域
+                            aiResponseContent.value = data.originalContent;
+                            
+                            // 在结果预览中显示提示
+                            resultPreview.innerHTML = `<p>AI响应内容已在下方文本框中显示</p>
+                                                     <p>您可以从文本中手动查找图片URL（如果有）</p>`;
+                            
                             uploadBtn.disabled = false;
                             
                             // 清除轮询
@@ -609,9 +619,9 @@
                             break;
                             
                         case 'completed':
-                            if (!data.resultUrl) {
-                                console.error('任务完成但缺少resultUrl:', data);
-                                showStatus('处理完成，但未找到图片链接', 'error');
+                            if (!data.originalContent) {
+                                console.error('任务完成但缺少原始内容:', data);
+                                showStatus('处理完成，但未找到AI响应内容', 'error');
                                 uploadBtn.disabled = false;
                                 
                                 // 清除计时器
@@ -622,27 +632,16 @@
                                 break;
                             }
                             
-                            // 添加URL检查
-                            try {
-                                console.log('检查图片URL是否可访问:', data.resultUrl);
-                                // 检查URL是否有效 - 仅检查URL格式
-                                const isValidUrl = /^https?:\/\//.test(data.resultUrl);
-                                if (!isValidUrl) {
-                                    console.error('无效的URL格式:', data.resultUrl);
-                                    showStatus('处理完成，但获得的图片链接格式无效', 'error');
-                                    console.log('无效链接内容:', data.resultUrl);
-                                    uploadBtn.disabled = false;
-                                    break;
-                                }
-                            } catch (urlError) {
-                                console.warn('检查URL时出错:', urlError);
-                            }
+                            // 显示AI原始响应内容
+                            showStatus('AI响应内容获取成功！', 'success');
                             
-                            showStatus('图片生成成功！', 'success');
-                            resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片"
-                                                   onerror="this.onerror=null;this.src='';this.alt='图片加载失败';alert('图片加载失败，URL可能无效');">
-                                                <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a>
-                                                <br><span style="font-size:12px;word-break:break-all;">图片链接: ${data.resultUrl}</span></p>`;
+                            // 填充文本区域
+                            aiResponseContent.value = data.originalContent;
+                            
+                            // 在结果预览中显示提示
+                            resultPreview.innerHTML = `<p>AI响应内容已在下方文本框中显示</p>
+                                                     <p>您可以从文本中手动查找图片URL（如果有）</p>`;
+                            
                             uploadBtn.disabled = false;
                             
                             // 清除计时器
