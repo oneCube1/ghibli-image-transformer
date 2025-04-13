@@ -209,7 +209,7 @@
 
             try {
                 // 提交任务，获取任务ID
-                const response = await fetch('/api/transform', {
+                const response = await fetch('https://ghibli-image-transformer.onecuber1.workers.dev/api/transform', {
                     method: 'POST',
                     body: formData
                 });
@@ -246,7 +246,7 @@
             // 使用setTimeout实现轮询
             const checkStatus = async () => {
                 try {
-                    const response = await fetch(`/api/transform/status/${taskId}`);
+                    const response = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`);
                     
                     if (!response.ok) {
                         throw new Error(`服务器返回错误: ${response.status}`);
