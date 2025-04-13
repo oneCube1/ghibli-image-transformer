@@ -396,10 +396,29 @@
                         }
                         
                         if (data.status === 'completed' && data.resultUrl) {
+                            // 添加URL检查
+                            try {
+                                // 检查URL是否可访问
+                                const urlCheck = await fetch(data.resultUrl, { method: 'HEAD' })
+                                    .catch(e => {
+                                        console.warn('图片URL检查失败:', e);
+                                        return { ok: false };
+                                    });
+                                    
+                                if (!urlCheck.ok) {
+                                    console.warn('图片URL无法访问:', data.resultUrl);
+                                    alert('警告: 图片URL可能无法访问，将尝试显示。\n' + statusInfo);
+                                }
+                            } catch (urlError) {
+                                console.warn('检查图片URL时出错:', urlError);
+                            }
+                            
                             // 直接显示结果
                             showStatus('图片生成成功！', 'success');
-                            resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片">
-                                                    <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a></p>`;
+                            resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片"
+                                                   onerror="this.onerror=null;this.src='';this.alt='图片加载失败';alert('图片加载失败，URL可能无效');">
+                                                <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a>
+                                                <br><span style="font-size:12px;word-break:break-all;">图片链接: ${data.resultUrl}</span></p>`;
                             uploadBtn.disabled = false;
                             
                             // 清除轮询
@@ -410,6 +429,18 @@
                             
                             // 移除按钮
                             checkButton.remove();
+                        } else if (data.status === 'failed') {
+                            statusInfo += `\n错误: ${data.error || '未知错误'}`;
+                            alert(statusInfo);
+                            
+                            showStatus(`处理失败: ${data.error || '未知错误'}`, 'error');
+                            uploadBtn.disabled = false;
+                            
+                            // 清除轮询
+                            if (pollTimer) {
+                                clearTimeout(pollTimer);
+                                pollTimer = null;
+                            }
                         } else {
                             alert(statusInfo);
                             checkButton.disabled = false;
@@ -591,9 +622,27 @@
                                 break;
                             }
                             
+                            // 添加URL检查
+                            try {
+                                console.log('检查图片URL是否可访问:', data.resultUrl);
+                                // 检查URL是否有效 - 仅检查URL格式
+                                const isValidUrl = /^https?:\/\//.test(data.resultUrl);
+                                if (!isValidUrl) {
+                                    console.error('无效的URL格式:', data.resultUrl);
+                                    showStatus('处理完成，但获得的图片链接格式无效', 'error');
+                                    console.log('无效链接内容:', data.resultUrl);
+                                    uploadBtn.disabled = false;
+                                    break;
+                                }
+                            } catch (urlError) {
+                                console.warn('检查URL时出错:', urlError);
+                            }
+                            
                             showStatus('图片生成成功！', 'success');
-                            resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片">
-                                                  <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a></p>`;
+                            resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片"
+                                                   onerror="this.onerror=null;this.src='';this.alt='图片加载失败';alert('图片加载失败，URL可能无效');">
+                                                <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a>
+                                                <br><span style="font-size:12px;word-break:break-all;">图片链接: ${data.resultUrl}</span></p>`;
                             uploadBtn.disabled = false;
                             
                             // 清除计时器
