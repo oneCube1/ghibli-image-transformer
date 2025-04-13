@@ -333,17 +333,45 @@
             // 最大轮询次数
             const maxAttempts = 20;
             let attempts = 0;
+            // 连续错误计数
+            let errorCount = 0;
             
             // 使用setTimeout实现轮询
             const checkStatus = async () => {
                 try {
+                    console.log(`第${attempts+1}次检查任务状态: ${taskId}`);
+                    
                     const response = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`);
                     
                     if (!response.ok) {
-                        throw new Error(`服务器返回错误: ${response.status}`);
+                        errorCount++;
+                        console.error(`轮询返回错误状态码: ${response.status}`);
+                        
+                        // 如果连续出现3次错误，才向用户显示错误
+                        if (errorCount >= 3) {
+                            throw new Error(`服务器返回错误: ${response.status}`);
+                        } else {
+                            // 继续轮询
+                            scheduleNextCheck();
+                            return;
+                        }
                     }
                     
-                    const data = await response.json();
+                    // 成功获取响应，重置错误计数
+                    errorCount = 0;
+                    
+                    const responseText = await response.text();
+                    console.log('轮询响应内容:', responseText);
+                    
+                    let data;
+                    try {
+                        data = JSON.parse(responseText);
+                    } catch (e) {
+                        console.error('解析JSON响应失败:', e);
+                        console.error('原始响应:', responseText);
+                        scheduleNextCheck();
+                        return;
+                    }
                     
                     switch (data.status) {
                         case 'pending':
@@ -357,6 +385,13 @@
                             break;
                             
                         case 'completed':
+                            if (!data.resultUrl) {
+                                console.error('任务完成但缺少resultUrl:', data);
+                                showStatus('处理完成，但未找到图片链接', 'error');
+                                uploadBtn.disabled = false;
+                                break;
+                            }
+                            
                             showStatus('图片生成成功！', 'success');
                             resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片">
                                                   <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a></p>`;
@@ -364,25 +399,39 @@
                             break;
                             
                         case 'failed':
-                            showStatus(`处理失败: ${data.error || '未知错误'}`, 'error');
+                            let errorMsg = data.error || '未知错误';
+                            if (data.stack) {
+                                console.error('错误堆栈:', data.stack);
+                            }
+                            showStatus(`处理失败: ${errorMsg}`, 'error');
                             uploadBtn.disabled = false;
                             break;
                             
                         default:
+                            console.warn('未知任务状态:', data.status);
                             showStatus('未知任务状态', 'error');
                             uploadBtn.disabled = false;
                     }
                 } catch (error) {
-                    console.error('轮询错误:', error);
-                    // 出错时仍继续轮询
-                    scheduleNextCheck();
+                    console.error('轮询过程出错:', error);
+                    // 轮询错误次数过多时才停止，使系统更健壮
+                    if (errorCount >= 5) {
+                        showStatus(`轮询失败: ${error.message}`, 'error');
+                        uploadBtn.disabled = false;
+                    } else {
+                        // 出错时仍继续轮询
+                        scheduleNextCheck();
+                    }
                 }
             };
             
             const scheduleNextCheck = () => {
                 attempts++;
                 if (attempts < maxAttempts) {
-                    setTimeout(checkStatus, pollInterval);
+                    // 使用递增的间隔（从3秒增加到最多10秒）
+                    const adaptiveInterval = Math.min(pollInterval * (1 + attempts/10), 10000);
+                    console.log(`计划${adaptiveInterval/1000}秒后进行下一次检查`);
+                    setTimeout(checkStatus, adaptiveInterval);
                 } else {
                     showStatus('任务超时，请重试', 'error');
                     uploadBtn.disabled = false;
