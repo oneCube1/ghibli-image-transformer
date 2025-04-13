@@ -1,0 +1,7 @@
+name = "ghibli-image-transformer"
+main = "worker.js"
+compatibility_date = "2023-12-01"
+
+kv_namespaces = [
+  { binding = "IMAGE_TASKS", id = "11202d3a135e46f6b7065601d35590d4" }
+] 

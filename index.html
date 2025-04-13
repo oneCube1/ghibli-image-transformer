@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>吉卜力风格图片生成器</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #4a6572;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #4a6572;
+            background: #f9f9f9;
+        }
+        .upload-area.highlight {
+            border-color: #4CAF50;
+            background: #e8f5e9;
+        }
+        #file-input {
+            display: none;
+        }
+        .btn {
+            background-color: #4a6572;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #344955;
+        }
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .preview-box {
+            width: 48%;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .preview-box img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .loading {
+            font-style: italic;
+            color: #2196F3;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .error {
+            color: #F44336;
+        }
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>吉卜力风格图片生成器</h1>
+        <div id="upload-area" class="upload-area">
+            <p>点击或拖放图片到这里上传</p>
+            <input type="file" id="file-input" accept="image/*">
+        </div>
+        <div class="text-center">
+            <button id="upload-btn" class="btn" disabled>生成吉卜力风格图片</button>
+        </div>
+        <div id="status" class="status"></div>
+        <div class="preview-container">
+            <div class="preview-box">
+                <h3>原始图片</h3>
+                <div id="original-preview"></div>
+            </div>
+            <div class="preview-box">
+                <h3>吉卜力风格图片</h3>
+                <div id="result-preview"></div>
+            </div>
+        </div>
+    </div>
+    <footer>
+        <p>吉卜力风格图片生成器 &copy; 2024</p>
+    </footer>
+
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const originalPreview = document.getElementById('original-preview');
+        const resultPreview = document.getElementById('result-preview');
+        const statusDiv = document.getElementById('status');
+        
+        let selectedFile = null;
+
+        // 点击上传区域触发文件选择
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 拖拽事件
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('highlight');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('highlight');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('highlight');
+            
+            if (e.dataTransfer.files.length) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        // 文件选择事件
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        // 处理选中的文件
+        function handleFileSelect(file) {
+            if (!file.type.match('image.*')) {
+                showStatus('请选择图片文件', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            uploadBtn.disabled = false;
+            
+            // 显示原图预览
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                originalPreview.innerHTML = `<img src="${e.target.result}" alt="原始图片">`;
+                resultPreview.innerHTML = ''; // 清空结果预览
+            };
+            reader.readAsDataURL(file);
+            
+            showStatus('图片已选择，点击"生成吉卜力风格图片"按钮开始处理', 'success');
+        }
+
+        // 上传按钮点击事件
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFile) {
+                showStatus('请先选择一张图片', 'error');
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            showStatus('正在提交任务，请稍候...', 'loading');
+
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+
+            try {
+                // 提交任务，获取任务ID
+                const response = await fetch('/api/transform', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`服务器返回错误: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.taskId) {
+                    showStatus('任务已提交，正在处理中...', 'loading');
+                    
+                    // 开始轮询任务状态
+                    pollTaskStatus(data.taskId);
+                } else {
+                    showStatus('提交失败，未获取到任务ID', 'error');
+                }
+            } catch (error) {
+                showStatus(`提交失败: ${error.message}`, 'error');
+                console.error('Error:', error);
+                uploadBtn.disabled = false;
+            }
+        });
+
+        // 轮询任务状态的函数
+        async function pollTaskStatus(taskId) {
+            // 轮询间隔（毫秒）
+            const pollInterval = 3000;
+            // 最大轮询次数
+            const maxAttempts = 20;
+            let attempts = 0;
+            
+            // 使用setTimeout实现轮询
+            const checkStatus = async () => {
+                try {
+                    const response = await fetch(`/api/transform/status/${taskId}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`服务器返回错误: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    switch (data.status) {
+                        case 'pending':
+                            showStatus('任务等待处理中...', 'loading');
+                            scheduleNextCheck();
+                            break;
+                            
+                        case 'processing':
+                            showStatus('正在处理图片...', 'loading');
+                            scheduleNextCheck();
+                            break;
+                            
+                        case 'completed':
+                            showStatus('图片生成成功！', 'success');
+                            resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片">
+                                                  <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a></p>`;
+                            uploadBtn.disabled = false;
+                            break;
+                            
+                        case 'failed':
+                            showStatus(`处理失败: ${data.error || '未知错误'}`, 'error');
+                            uploadBtn.disabled = false;
+                            break;
+                            
+                        default:
+                            showStatus('未知任务状态', 'error');
+                            uploadBtn.disabled = false;
+                    }
+                } catch (error) {
+                    console.error('轮询错误:', error);
+                    // 出错时仍继续轮询
+                    scheduleNextCheck();
+                }
+            };
+            
+            const scheduleNextCheck = () => {
+                attempts++;
+                if (attempts < maxAttempts) {
+                    setTimeout(checkStatus, pollInterval);
+                } else {
+                    showStatus('任务超时，请重试', 'error');
+                    uploadBtn.disabled = false;
+                }
+            };
+            
+            // 开始第一次检查
+            checkStatus();
+        }
+
+        // 显示状态信息
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+    </script>
+</body>
+</html> 
