@@ -450,27 +450,67 @@
 
         clearBtn.addEventListener('click', clearSelection);
 
-        // 点击上传区域触发文件选择
+        // 单文件上传事件处理
         uploadArea.addEventListener('click', () => {
-            fileInput.click();
+            if (!isfolderMode) {
+                fileInput.click();
+            }
         });
 
-        // 拖拽事件
+        // 文件夹上传事件处理
+        folderArea.addEventListener('click', () => {
+            if (isfolderMode) {
+                folderInput.click();
+            }
+        });
+
+        // 拖拽事件（单文件）
         uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('highlight');
+            if (!isfolderMode) {
+                e.preventDefault();
+                uploadArea.classList.add('highlight');
+            }
         });
 
         uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('highlight');
+            if (!isfolderMode) {
+                uploadArea.classList.remove('highlight');
+            }
         });
 
         uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('highlight');
-            
-            if (e.dataTransfer.files.length) {
-                handleFileSelect(e.dataTransfer.files[0]);
+            if (!isfolderMode) {
+                e.preventDefault();
+                uploadArea.classList.remove('highlight');
+                
+                if (e.dataTransfer.files.length) {
+                    handleFileSelect(e.dataTransfer.files[0]);
+                }
+            }
+        });
+
+        // 文件夹拖拽事件
+        folderArea.addEventListener('dragover', (e) => {
+            if (isfolderMode) {
+                e.preventDefault();
+                folderArea.classList.add('highlight');
+            }
+        });
+
+        folderArea.addEventListener('dragleave', () => {
+            if (isfolderMode) {
+                folderArea.classList.remove('highlight');
+            }
+        });
+
+        folderArea.addEventListener('drop', (e) => {
+            if (isfolderMode) {
+                e.preventDefault();
+                folderArea.classList.remove('highlight');
+                
+                if (e.dataTransfer.files.length) {
+                    handleFolderSelect(e.dataTransfer.files);
+                }
             }
         });
 
@@ -481,7 +521,14 @@
             }
         });
 
-        // 处理选中的文件
+        // 文件夹选择事件
+        folderInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFolderSelect(e.target.files);
+            }
+        });
+
+        // 处理选中的单个文件
         function handleFileSelect(file) {
             if (!file.type.match('image.*')) {
                 showStatus('请选择图片文件', 'error');
@@ -505,11 +552,13 @@
                             selectedFile = resizedFile;
                             showStatus(`图片已选择并压缩 (${(resizedFile.size / 1024).toFixed(2)}KB)，点击"生成吉卜力风格图片"按钮开始处理`, 'success');
                             uploadBtn.disabled = false;
+                            clearBtn.style.display = 'inline-block';
                         });
                     } else {
                         selectedFile = file;
                         showStatus('图片已选择，点击"生成吉卜力风格图片"按钮开始处理', 'success');
                         uploadBtn.disabled = false;
+                        clearBtn.style.display = 'inline-block';
                     }
                     
                 resultPreview.innerHTML = ''; // 清空结果预览
@@ -517,6 +566,48 @@
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
+        }
+
+        // 处理选中的文件夹
+        function handleFolderSelect(files) {
+            const imageFiles = [];
+            
+            // 过滤出图片文件
+            Array.from(files).forEach(file => {
+                if (file.type.match('image.*')) {
+                    imageFiles.push(file);
+                }
+            });
+
+            if (imageFiles.length === 0) {
+                showStatus('文件夹中没有找到图片文件', 'error');
+                return;
+            }
+
+            selectedFiles = imageFiles;
+            displayFolderFiles(imageFiles);
+            
+            showStatus(`已选择 ${imageFiles.length} 个图片文件，点击"生成吉卜力风格图片"按钮开始批量处理`, 'success');
+            uploadBtn.disabled = false;
+            clearBtn.style.display = 'inline-block';
+        }
+
+        // 显示文件夹中的文件列表
+        function displayFolderFiles(files) {
+            folderFiles.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <span class="file-name" title="${file.name}">${file.name}</span>
+                    <span class="file-size">${(file.size / 1024).toFixed(2)}KB</span>
+                    <span class="file-status pending" id="status-${index}">等待处理</span>
+                `;
+                folderFiles.appendChild(fileItem);
+            });
+            
+            folderFileList.style.display = 'block';
         }
         
         // 调整图片尺寸函数
@@ -562,11 +653,23 @@
 
         // 上传按钮点击事件
         uploadBtn.addEventListener('click', async () => {
-            if (!selectedFile) {
-                showStatus('请先选择一张图片', 'error');
-                return;
+            if (isfolderMode) {
+                if (selectedFiles.length === 0) {
+                    showStatus('请先选择包含图片的文件夹', 'error');
+                    return;
+                }
+                await startBatchProcessing();
+            } else {
+                if (!selectedFile) {
+                    showStatus('请先选择一张图片', 'error');
+                    return;
+                }
+                await processSingleFile();
             }
+        });
 
+        // 处理单个文件
+        async function processSingleFile() {
             uploadBtn.disabled = true;
             showStatus('正在提交任务，请稍候...', 'loading');
 
@@ -574,7 +677,6 @@
             formData.append('image', selectedFile);
 
             try {
-                // 提交任务，获取任务ID
                 console.log('开始提交图片，大小:', selectedFile.size, '类型:', selectedFile.type);
                 
                 const response = await fetch('https://ghibli-image-transformer.onecuber1.workers.dev/api/transform', {
@@ -601,7 +703,6 @@
                             errorDetail = errorData.error;
                         }
                     } catch (e) {
-                        // 解析失败，使用原始文本
                         if (responseText) {
                             errorDetail = responseText;
                         }
@@ -620,8 +721,6 @@
                 
                 if (data.taskId) {
                     showStatus('任务已提交，正在处理中...', 'loading');
-                    
-                    // 开始轮询任务状态
                     pollTaskStatus(data.taskId);
                 } else {
                     showStatus('提交失败，未获取到任务ID', 'error');
@@ -632,9 +731,206 @@
                 console.error('Error:', error);
                 uploadBtn.disabled = false;
             }
-        });
+        }
 
-        // 轮询任务状态的函数
+        // 开始批量处理
+        async function startBatchProcessing() {
+            batchProcessing = true;
+            currentBatchIndex = 0;
+            batchResults = [];
+            
+            uploadBtn.disabled = true;
+            batchProgress.classList.add('active');
+            resultsGrid.innerHTML = '';
+            
+            showStatus('开始批量处理...', 'loading');
+            updateProgress(0, selectedFiles.length);
+            
+            // 逐个处理文件
+            for (let i = 0; i < selectedFiles.length; i++) {
+                if (!batchProcessing) break; // 如果被中断，停止处理
+                
+                currentBatchIndex = i;
+                const file = selectedFiles[i];
+                
+                // 更新文件状态
+                updateFileStatus(i, 'processing', '正在处理...');
+                
+                try {
+                    // 如果文件太大，先压缩
+                    let processFile = file;
+                    if (file.size > 800 * 1024) {
+                        processFile = await compressImageAsync(file);
+                    }
+                    
+                    const result = await processBatchFile(processFile, i);
+                    batchResults.push({
+                        file: file,
+                        result: result,
+                        status: 'completed'
+                    });
+                    
+                    updateFileStatus(i, 'completed', '处理完成');
+                    addBatchResult(file, result, 'completed');
+                    
+                } catch (error) {
+                    console.error(`处理文件 ${file.name} 失败:`, error);
+                    batchResults.push({
+                        file: file,
+                        error: error.message,
+                        status: 'failed'
+                    });
+                    
+                    updateFileStatus(i, 'failed', '处理失败');
+                    addBatchResult(file, null, 'failed', error.message);
+                }
+                
+                updateProgress(i + 1, selectedFiles.length);
+                
+                // 添加延迟避免请求过于频繁
+                if (i < selectedFiles.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            
+            batchProcessing = false;
+            uploadBtn.disabled = false;
+            
+            const completed = batchResults.filter(r => r.status === 'completed').length;
+            const failed = batchResults.filter(r => r.status === 'failed').length;
+            
+            showStatus(`批量处理完成！成功: ${completed}, 失败: ${failed}`, completed > 0 ? 'success' : 'error');
+        }
+
+        // 压缩图片（异步版本）
+        function compressImageAsync(file) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = function() {
+                    resizeImage(img, file.type, resolve);
+                };
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 处理批量文件中的单个文件
+        async function processBatchFile(file, index) {
+            const formData = new FormData();
+            formData.append('image', file);
+
+            const response = await fetch('https://ghibli-image-transformer.onecuber1.workers.dev/api/transform', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`服务器错误: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.taskId) {
+                throw new Error('未获取到任务ID');
+            }
+
+            // 轮询等待结果
+            return await pollBatchTaskStatus(data.taskId, index);
+        }
+
+        // 批量处理的轮询状态
+        async function pollBatchTaskStatus(taskId, fileIndex) {
+            const maxAttempts = 40; // 减少单个文件的等待时间
+            let attempts = 0;
+            
+            while (attempts < maxAttempts) {
+                try {
+                    const response = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`状态查询失败: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    switch (data.status) {
+                        case 'completed':
+                            return {
+                                taskId: taskId,
+                                resultUrl: data.resultUrl,
+                                originalContent: data.originalContent
+                            };
+                        case 'failed':
+                            throw new Error(data.error || '处理失败');
+                        case 'pending':
+                        case 'processing':
+                            // 继续等待
+                            break;
+                        default:
+                            console.warn('未知状态:', data.status);
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    attempts++;
+                    
+                } catch (error) {
+                    console.error('轮询错误:', error);
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    attempts++;
+                }
+            }
+            
+            throw new Error('处理超时');
+        }
+
+        // 更新文件状态
+        function updateFileStatus(index, status, text) {
+            const statusElement = document.getElementById(`status-${index}`);
+            if (statusElement) {
+                statusElement.className = `file-status ${status}`;
+                statusElement.textContent = text;
+            }
+        }
+
+        // 更新进度条
+        function updateProgress(current, total) {
+            const percentage = Math.round((current / total) * 100);
+            progressFill.style.width = `${percentage}%`;
+            progressDetails.textContent = `${current} / ${total} 完成`;
+        }
+
+        // 添加批量处理结果
+        function addBatchResult(file, result, status, error = null) {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item';
+            
+            // 创建原图缩略图
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const statusClass = status === 'completed' ? 'success' : 'error';
+                const statusText = status === 'completed' ? '处理成功' : `处理失败: ${error}`;
+                
+                resultItem.innerHTML = `
+                    <div class="result-filename">${file.name}</div>
+                    <img src="${e.target.result}" alt="原图" class="original-thumb">
+                    <div class="result-status ${statusClass}">${statusText}</div>
+                    ${result && result.resultUrl ? 
+                        `<img src="${result.resultUrl}" alt="处理结果" onerror="this.style.display='none'">` : 
+                        '<p>未生成结果图片</p>'
+                    }
+                `;
+            };
+            reader.readAsDataURL(file);
+            
+            resultsGrid.appendChild(resultItem);
+        }
+
+        // 轮询任务状态的函数（单文件）
         async function pollTaskStatus(taskId) {
             // 清除之前可能存在的计时器
             if (pollTimer) {
@@ -644,7 +940,7 @@
             
             // 轮询间隔（毫秒）
             const pollInterval = 3000;
-            // 最大轮询次数 - 增加到60次，最多等待10分钟
+            // 最大轮询次数
             const maxAttempts = 60;
             let attempts = 0;
             // 连续错误计数
@@ -700,16 +996,20 @@
                             statusInfo += `\n完成时间: ${new Date(data.completed).toLocaleString()}`;
                         }
                         
-                        if (data.status === 'completed' && data.originalContent) {
-                            // 显示AI原始响应内容
-                            showStatus('AI响应内容获取成功！', 'success');
+                        if (data.status === 'completed') {
+                            // 处理成功的情况
+                            showStatus('处理完成！', 'success');
                             
-                            // 填充文本区域
-                            aiResponseContent.value = data.originalContent;
+                            if (data.originalContent) {
+                                aiResponseContent.value = data.originalContent;
+                            }
                             
-                            // 在结果预览中显示提示
-                            resultPreview.innerHTML = `<p>AI响应内容已在下方文本框中显示</p>
-                                                     <p>您可以从文本中手动查找图片URL（如果有）</p>`;
+                            if (data.resultUrl) {
+                                resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格处理结果" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                                         <p style="display: none;">图片加载失败，但处理已完成</p>`;
+                            } else {
+                                resultPreview.innerHTML = `<p>处理完成，但未生成结果图片</p>`;
+                            }
                             
                             uploadBtn.disabled = false;
                             
@@ -737,27 +1037,6 @@
                             alert(statusInfo);
                             checkButton.disabled = false;
                             checkButton.innerText = '手动检查任务状态';
-                            
-                            // 尝试恢复任务
-                            if (data.status === 'processing' || data.status === 'pending') {
-                                try {
-                                    const recoverResponse = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/recover/${taskId}`);
-                                    
-                                    if (!recoverResponse.ok) {
-                                        console.warn('任务恢复请求失败:', recoverResponse.status);
-                                        return;
-                                    }
-                                    
-                                    const recoverData = await recoverResponse.json();
-                                    console.log('恢复响应:', recoverData);
-                                    
-                                    if (recoverData.status === 'recovering') {
-                                        showStatus('正在尝试恢复任务，请继续等待...', 'loading');
-                                    }
-                                } catch (recoverError) {
-                                    console.error('恢复请求错误:', recoverError);
-                                }
-                            }
                         }
                     } catch (error) {
                         console.error('手动检查错误:', error);
@@ -793,7 +1072,7 @@
                         longRunningNoticeShown = true;
                     }
                     
-                    // 添加手动检查按钮 - 提前到第10次检查显示，提高用户体验
+                    // 添加手动检查按钮
                     if (attempts >= 10) {
                         createManualCheckButton();
                     }
@@ -801,30 +1080,26 @@
                     const response = await fetchWithTimeout(
                         `https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`,
                         {},
-                        15000 // 15秒超时，避免请求卡住
+                        15000 // 15秒超时
                     ).catch(error => {
                         console.error('轮询网络错误:', error);
                         errorCount++;
-                        // 继续轮询而不是直接抛出错误
                         if (errorCount < 5) {
                             scheduleNextCheck();
-                            return null; // 返回null表示出错但继续轮询
+                            return null;
                         }
-                        throw error; // 多次错误后才抛出
+                        throw error;
                     });
                     
-                    // 如果网络错误且已决定继续轮询，直接返回
                     if (response === null) return;
                     
                     if (!response.ok) {
                         errorCount++;
                         console.error(`轮询返回错误状态码: ${response.status}`);
                         
-                        // 如果连续出现3次错误，才向用户显示错误
                         if (errorCount >= 3) {
                             throw new Error(`服务器返回错误: ${response.status}`);
                         } else {
-                            // 继续轮询
                             scheduleNextCheck();
                             return;
                         }
@@ -860,173 +1135,81 @@
                             break;
                             
                         case 'processing':
-                            // 检查processing状态保持时间，如果超过2分钟且轮询次数超过20次，尝试手动检查AI结果
-                            if (attempts > 20) {
-                                showStatus('处理中，正在持续尝试获取结果...', 'loading');
-                                
-                                // 如果状态停滞超过一定时间，可以尝试手动检查一下是否有结果
-                                if (attempts % 10 === 0 && attempts >= 20) {
-                                    console.log('状态长时间为processing，尝试恢复任务');
-                                    
-                                    // 调用恢复接口
-                                    try {
-                                        const recoverResponse = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/recover/${taskId}`)
-                                            .catch(error => {
-                                                console.error('恢复接口网络错误:', error);
-                                                return null; // 网络错误时返回null而不是抛出异常
-                                            });
-                                            
-                                        if (recoverResponse && recoverResponse.ok) {
-                                            const recoverData = await recoverResponse.json()
-                                                .catch(e => {
-                                                    console.error('解析恢复响应出错:', e);
-                                                    return {}; // 解析错误时返回空对象
-                                                });
-                                            
-                                            console.log('恢复任务响应:', recoverData);
-                                            
-                                            if (recoverData.status === 'recovering') {
-                                                showStatus('正在尝试恢复任务，请继续等待...', 'loading');
-                                            }
-                                        }
-                                    } catch (recoverError) {
-                                        console.error('调用恢复接口失败:', recoverError);
-                                        // 恢复失败不影响轮询继续
-                                    }
-                                }
-                            } else {
-                                showStatus('正在处理图片...', 'loading');
-                            }
+                            showStatus('图片正在处理中，请耐心等待...', 'loading');
                             scheduleNextCheck();
                             break;
                             
                         case 'completed':
-                            if (!data.originalContent) {
-                                console.error('任务完成但缺少原始内容:', data);
-                                showStatus('处理完成，但未找到AI响应内容', 'error');
-                                uploadBtn.disabled = false;
-                                
-                                // 清除计时器
-                                if (pollTimer) {
-                                    clearTimeout(pollTimer);
-                                    pollTimer = null;
-                                }
-                                break;
+                            showStatus('处理完成！', 'success');
+                            
+                            if (data.originalContent) {
+                                aiResponseContent.value = data.originalContent;
                             }
                             
-                            // 显示AI原始响应内容
-                            showStatus('AI响应内容获取成功！', 'success');
-                            
-                            // 填充文本区域
-                            aiResponseContent.value = data.originalContent;
-                            
-                            // 在结果预览中显示提示
-                            resultPreview.innerHTML = `<p>AI响应内容已在下方文本框中显示</p>
-                                                     <p>您可以从文本中手动查找图片URL（如果有）</p>`;
+                            if (data.resultUrl) {
+                                resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格处理结果" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                                         <p style="display: none;">图片加载失败，但处理已完成</p>`;
+                            } else {
+                                resultPreview.innerHTML = `<p>处理完成，但未生成结果图片</p>`;
+                            }
                             
                             uploadBtn.disabled = false;
                             
-                            // 清除计时器
-                            if (pollTimer) {
-                                clearTimeout(pollTimer);
-                                pollTimer = null;
-                            }
-                            
-                            // 移除手动检查按钮（如果存在）
-                            const checkBtn = document.getElementById('manual-check-btn');
-                            if (checkBtn) {
-                                checkBtn.remove();
-                            }
+                            // 移除手动检查按钮
+                            const manualBtn = document.getElementById('manual-check-btn');
+                            if (manualBtn) manualBtn.remove();
                             break;
                             
                         case 'failed':
-                            let errorMsg = data.error || '未知错误';
-                            if (data.stack) {
-                                console.error('错误堆栈:', data.stack);
-                            }
-                            showStatus(`处理失败: ${errorMsg}`, 'error');
+                            showStatus(`处理失败: ${data.error || '未知错误'}`, 'error');
                             uploadBtn.disabled = false;
                             
-                            // 清除计时器
-                            if (pollTimer) {
-                                clearTimeout(pollTimer);
-                                pollTimer = null;
-                            }
+                            // 移除手动检查按钮
+                            const manualBtn2 = document.getElementById('manual-check-btn');
+                            if (manualBtn2) manualBtn2.remove();
                             break;
                             
                         default:
-                            console.warn('未知任务状态:', data.status);
-                            showStatus('未知任务状态', 'error');
-                            uploadBtn.disabled = false;
-                            
-                            // 清除计时器
-                            if (pollTimer) {
-                                clearTimeout(pollTimer);
-                                pollTimer = null;
-                            }
+                            console.warn('未知状态:', data.status);
+                            scheduleNextCheck();
                     }
+                    
                 } catch (error) {
-                    console.error('轮询过程出错:', error);
-                    // 轮询错误次数过多时才停止，使系统更健壮
-                    if (errorCount >= 5) {
-                        showStatus(`轮询失败: ${error.message}`, 'error');
-                        uploadBtn.disabled = false;
-                        
-                        // 清除计时器
-                        if (pollTimer) {
-                            clearTimeout(pollTimer);
-                            pollTimer = null;
-                        }
-                    } else {
-                        // 出错时仍继续轮询
+                    console.error('检查状态时出错:', error);
+                    
+                    // 如果是网络错误或超时，继续轮询
+                    if (attempts < maxAttempts && (error.message.includes('超时') || error.message.includes('网络'))) {
+                        showStatus('网络不稳定，继续尝试检查状态...', 'loading');
                         scheduleNextCheck();
+                        return;
                     }
+                    
+                    // 其他错误，停止轮询
+                    showStatus(`状态检查失败: ${error.message}`, 'error');
+                    uploadBtn.disabled = false;
                 }
             };
             
+            // 调度下一次检查
             const scheduleNextCheck = () => {
                 attempts++;
-                // 增加最大轮询次数，确保等待足够长时间
                 if (attempts < maxAttempts) {
-                    // 使用递增的间隔（从3秒增加到最多10秒）
-                    const adaptiveInterval = Math.min(pollInterval * (1 + attempts/10), 10000);
-                    console.log(`计划${adaptiveInterval/1000}秒后进行下一次检查`);
-                    
-                    // 确保清除之前的计时器
-                    if (pollTimer) {
-                        clearTimeout(pollTimer);
-                    }
-                    
-                    pollTimer = setTimeout(checkStatus, adaptiveInterval);
+                    pollTimer = setTimeout(checkStatus, pollInterval);
                 } else {
-                    showStatus('任务超时，请重试', 'error');
+                    showStatus('检查超时，请手动检查任务状态', 'error');
                     uploadBtn.disabled = false;
-                    
-                    // 清除计时器
-                    if (pollTimer) {
-                        clearTimeout(pollTimer);
-                        pollTimer = null;
-                    }
+                    createManualCheckButton();
                 }
             };
             
             // 开始第一次检查
             checkStatus();
-            
-            // 添加页面卸载事件处理器
-            window.addEventListener('beforeunload', () => {
-                // 清除轮询计时器
-                if (pollTimer) {
-                    clearTimeout(pollTimer);
-                    pollTimer = null;
-                }
-            });
         }
 
         // 显示状态信息
         function showStatus(message, type) {
-            statusDiv.textContent = message;
-            statusDiv.className = 'status ' + type;
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type}`;
         }
     </script>
 </body>
