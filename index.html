@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: 'Microsoft YaHei', sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -24,6 +24,28 @@
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
+        
+        /* 上传模式选择 */
+        .mode-selector {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            gap: 10px;
+        }
+        .mode-btn {
+            background-color: #e0e0e0;
+            color: #333;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .mode-btn.active {
+            background-color: #4a6572;
+            color: white;
+        }
+        
         .upload-area {
             border: 2px dashed #ccc;
             border-radius: 8px;
@@ -41,9 +63,101 @@
             border-color: #4CAF50;
             background: #e8f5e9;
         }
-        #file-input {
+        #file-input, #folder-input {
             display: none;
         }
+        
+        /* 文件夹上传相关样式 */
+        .folder-upload-area {
+            display: none;
+        }
+        .folder-upload-area.active {
+            display: block;
+        }
+        
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            background: #f9f9f9;
+        }
+        .file-item {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-size {
+            color: #666;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+        .file-status {
+            margin-left: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
+        .file-status.pending {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .file-status.processing {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        .file-status.completed {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        .file-status.failed {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+        
+        /* 批量处理进度 */
+        .batch-progress {
+            display: none;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+        .batch-progress.active {
+            display: block;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #4caf50;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            text-align: center;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        
         .btn {
             background-color: #4a6572;
             color: white;
@@ -65,6 +179,8 @@
             background-color: #cccccc;
             cursor: not-allowed;
         }
+        
+        /* 结果展示区域 */
         .preview-container {
             display: flex;
             flex-wrap: wrap;
@@ -82,6 +198,50 @@
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+        
+        /* 批量结果展示 */
+        .batch-results {
+            display: none;
+            margin-top: 20px;
+        }
+        .batch-results.active {
+            display: block;
+        }
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .result-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            background: white;
+        }
+        .result-item img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .result-item .original-thumb {
+            max-height: 100px;
+            opacity: 0.7;
+        }
+        .result-filename {
+            font-weight: bold;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+        .result-status {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            margin: 5px 0;
+        }
+        
         .ai-response-box {
             width: 100%;
             margin-top: 20px;
@@ -122,20 +282,66 @@
             color: #666;
             font-size: 14px;
         }
+        
+        /* 控制按钮区域 */
+        .control-buttons {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .control-buttons .btn {
+            margin: 0 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>吉卜力风格图片生成器</h1>
-        <div id="upload-area" class="upload-area">
-            <p>点击或拖放图片到这里上传</p>
-            <input type="file" id="file-input" accept="image/*">
+        
+        <!-- 上传模式选择 -->
+        <div class="mode-selector">
+            <button class="mode-btn active" id="single-mode-btn">单个文件上传</button>
+            <button class="mode-btn" id="folder-mode-btn">文件夹批量上传</button>
         </div>
-        <div class="text-center">
+        
+        <!-- 单文件上传区域 -->
+        <div id="single-upload" class="single-upload-area">
+            <div id="upload-area" class="upload-area">
+                <p>点击或拖放图片到这里上传</p>
+                <input type="file" id="file-input" accept="image/*">
+            </div>
+        </div>
+        
+        <!-- 文件夹上传区域 -->
+        <div id="folder-upload" class="folder-upload-area">
+            <div id="folder-area" class="upload-area">
+                <p>点击选择包含图片的文件夹<br>支持批量处理文件夹中的所有图片文件</p>
+                <input type="file" id="folder-input" webkitdirectory multiple accept="image/*">
+            </div>
+            <div id="folder-file-list" class="file-list" style="display: none;">
+                <h4>选中的图片文件：</h4>
+                <div id="folder-files"></div>
+            </div>
+        </div>
+        
+        <!-- 控制按钮 -->
+        <div class="control-buttons">
             <button id="upload-btn" class="btn" disabled>生成吉卜力风格图片</button>
+            <button id="clear-btn" class="btn" style="display: none;">清空选择</button>
         </div>
+        
+        <!-- 批量处理进度 -->
+        <div id="batch-progress" class="batch-progress">
+            <div class="progress-text">批量处理进度</div>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill" style="width: 0%;"></div>
+            </div>
+            <div id="progress-details" class="progress-text">0 / 0 完成</div>
+        </div>
+        
         <div id="status" class="status"></div>
-        <div class="preview-container">
+        
+        <!-- 单文件结果预览 -->
+        <div id="single-results" class="preview-container">
             <div class="preview-box">
                 <h3>原始图片</h3>
                 <div id="original-preview"></div>
@@ -145,6 +351,13 @@
                 <div id="result-preview"></div>
             </div>
         </div>
+        
+        <!-- 批量处理结果 -->
+        <div id="batch-results" class="batch-results">
+            <h3>批量处理结果</h3>
+            <div id="results-grid" class="result-grid"></div>
+        </div>
+        
         <div class="ai-response-box">
             <h3>AI响应原始内容</h3>
             <textarea id="ai-response-content" class="ai-response-textarea" readonly></textarea>
@@ -155,18 +368,87 @@
     </footer>
 
     <script>
+        // DOM 元素获取
+        const singleModeBtn = document.getElementById('single-mode-btn');
+        const folderModeBtn = document.getElementById('folder-mode-btn');
+        const singleUpload = document.getElementById('single-upload');
+        const folderUpload = document.getElementById('folder-upload');
         const uploadArea = document.getElementById('upload-area');
+        const folderArea = document.getElementById('folder-area');
         const fileInput = document.getElementById('file-input');
+        const folderInput = document.getElementById('folder-input');
         const uploadBtn = document.getElementById('upload-btn');
+        const clearBtn = document.getElementById('clear-btn');
         const originalPreview = document.getElementById('original-preview');
         const resultPreview = document.getElementById('result-preview');
         const statusDiv = document.getElementById('status');
         const aiResponseContent = document.getElementById('ai-response-content');
+        const folderFileList = document.getElementById('folder-file-list');
+        const folderFiles = document.getElementById('folder-files');
+        const batchProgress = document.getElementById('batch-progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressDetails = document.getElementById('progress-details');
+        const singleResults = document.getElementById('single-results');
+        const batchResults = document.getElementById('batch-results');
+        const resultsGrid = document.getElementById('results-grid');
         
+        // 全局变量
         let selectedFile = null;
-
-        // 全局轮询计时器变量
+        let selectedFiles = [];
+        let isfolderMode = false;
         let pollTimer = null;
+        let batchProcessing = false;
+        let currentBatchIndex = 0;
+        let batchResults = [];
+
+        // 模式切换
+        singleModeBtn.addEventListener('click', () => switchToSingleMode());
+        folderModeBtn.addEventListener('click', () => switchToFolderMode());
+
+        function switchToSingleMode() {
+            isfolderMode = false;
+            singleModeBtn.classList.add('active');
+            folderModeBtn.classList.remove('active');
+            singleUpload.style.display = 'block';
+            folderUpload.classList.remove('active');
+            singleResults.style.display = 'flex';
+            batchResults.classList.remove('active');
+            batchProgress.classList.remove('active');
+            clearSelection();
+        }
+
+        function switchToFolderMode() {
+            isfolderMode = true;
+            folderModeBtn.classList.add('active');
+            singleModeBtn.classList.remove('active');
+            singleUpload.style.display = 'none';
+            folderUpload.classList.add('active');
+            singleResults.style.display = 'none';
+            batchResults.classList.add('active');
+            clearSelection();
+        }
+
+        // 清空选择
+        function clearSelection() {
+            selectedFile = null;
+            selectedFiles = [];
+            originalPreview.innerHTML = '';
+            resultPreview.innerHTML = '';
+            resultsGrid.innerHTML = '';
+            folderFiles.innerHTML = '';
+            folderFileList.style.display = 'none';
+            aiResponseContent.value = '';
+            uploadBtn.disabled = true;
+            clearBtn.style.display = 'none';
+            statusDiv.innerHTML = '';
+            batchProgress.classList.remove('active');
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+            }
+        }
+
+        clearBtn.addEventListener('click', clearSelection);
 
         // 点击上传区域触发文件选择
         uploadArea.addEventListener('click', () => {
