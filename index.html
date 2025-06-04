@@ -534,7 +534,7 @@
                 showStatus('请选择图片文件', 'error');
                 return;
             }
-            
+
             // 显示原图预览
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -561,7 +561,7 @@
                         clearBtn.style.display = 'inline-block';
                     }
                     
-                resultPreview.innerHTML = ''; // 清空结果预览
+                    resultPreview.innerHTML = ''; // 清空结果预览
                 };
                 img.src = e.target.result;
             };
@@ -694,7 +694,7 @@
                 } catch (textError) {
                     console.error('读取响应文本失败:', textError);
                 }
-
+                
                 if (!response.ok) {
                     let errorDetail = '请检查控制台日志获取更多信息';
                     try {
@@ -932,12 +932,6 @@
 
         // 轮询任务状态的函数（单文件）
         async function pollTaskStatus(taskId) {
-            // 清除之前可能存在的计时器
-            if (pollTimer) {
-                clearTimeout(pollTimer);
-                pollTimer = null;
-            }
-            
             // 轮询间隔（毫秒）
             const pollInterval = 3000;
             // 最大轮询次数
@@ -949,6 +943,7 @@
             const longRunningNoticeTime = 40000; // 40秒
             let longRunningNoticeShown = false;
             
+<<<<<<< HEAD
             // 创建手动检查按钮的函数
             const createManualCheckButton = () => {
                 if (document.getElementById('manual-check-btn')) {
@@ -1062,6 +1057,9 @@
             };
             
             // 使用try-catch包装的检查状态函数
+=======
+            // 使用setTimeout实现轮询
+>>>>>>> parent of 740761e (Update index.html)
             const checkStatus = async () => {
                 try {
                     console.log(`第${attempts+1}次检查任务状态: ${taskId}`);
@@ -1073,6 +1071,7 @@
                     }
                     
                     // 添加手动检查按钮
+<<<<<<< HEAD
                     if (attempts >= 10) {
                         createManualCheckButton();
                     }
@@ -1092,6 +1091,83 @@
                     });
                     
                     if (response === null) return;
+=======
+                    if (attempts >= 15 && !document.getElementById('manual-check-btn')) {
+                        // 创建手动检查按钮
+                        const checkButton = document.createElement('button');
+                        checkButton.id = 'manual-check-btn';
+                        checkButton.className = 'btn';
+                        checkButton.style.marginTop = '10px';
+                        checkButton.innerText = '手动检查任务状态';
+                        checkButton.onclick = async function() {
+                            try {
+                                checkButton.disabled = true;
+                                checkButton.innerText = '正在检查...';
+                                
+                                // 直接调用状态检查API
+                                const response = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`);
+                                
+                                if (!response.ok) {
+                                    throw new Error(`服务器返回错误: ${response.status}`);
+                                }
+                                
+                                const data = await response.json();
+                                console.log('手动检查结果:', data);
+                                
+                                // 显示详细状态信息
+                                let statusInfo = `当前状态: ${data.status}\n创建时间: ${new Date(data.created).toLocaleString()}`;
+                                
+                                if (data.updated) {
+                                    statusInfo += `\n更新时间: ${new Date(data.updated).toLocaleString()}`;
+                                }
+                                
+                                if (data.completed) {
+                                    statusInfo += `\n完成时间: ${new Date(data.completed).toLocaleString()}`;
+                                }
+                                
+                                if (data.status === 'completed' && data.resultUrl) {
+                                    // 直接显示结果
+                                    showStatus('图片生成成功！', 'success');
+                                    resultPreview.innerHTML = `<img src="${data.resultUrl}" alt="吉卜力风格图片">
+                                                            <p><a href="${data.resultUrl}" target="_blank" class="btn">查看完整图片</a></p>`;
+                                    uploadBtn.disabled = false;
+                                    
+                                    // 清除轮询
+                                    clearTimeout(pollTimer);
+                                    
+                                    // 移除按钮
+                                    checkButton.remove();
+                                } else {
+                                    alert(statusInfo);
+                                    checkButton.disabled = false;
+                                    checkButton.innerText = '手动检查任务状态';
+                                    
+                                    // 尝试恢复任务
+                                    if (data.status === 'processing' || data.status === 'pending') {
+                                        const recoverResponse = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/recover/${taskId}`);
+                                        const recoverData = await recoverResponse.json();
+                                        console.log('恢复响应:', recoverData);
+                                        
+                                        if (recoverData.status === 'recovering') {
+                                            showStatus('正在尝试恢复任务，请继续等待...', 'loading');
+                                        }
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('手动检查错误:', error);
+                                alert('检查失败: ' + error.message);
+                                checkButton.disabled = false;
+                                checkButton.innerText = '手动检查任务状态';
+                            }
+                        };
+                        
+                        // 添加到UI中
+                        const statusArea = document.getElementById('status').parentNode;
+                        statusArea.appendChild(checkButton);
+                    }
+                    
+                    const response = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/status/${taskId}`);
+>>>>>>> parent of 740761e (Update index.html)
                     
                     if (!response.ok) {
                         errorCount++;
@@ -1108,15 +1184,8 @@
                     // 成功获取响应，重置错误计数
                     errorCount = 0;
                     
-                    let responseText;
-                    try {
-                        responseText = await response.text();
-                        console.log('轮询响应内容:', responseText);
-                    } catch (textError) {
-                        console.error('读取响应文本失败:', textError);
-                        scheduleNextCheck();
-                        return;
-                    }
+                    const responseText = await response.text();
+                    console.log('轮询响应内容:', responseText);
                     
                     let data;
                     try {
@@ -1135,11 +1204,41 @@
                             break;
                             
                         case 'processing':
+<<<<<<< HEAD
                             showStatus('图片正在处理中，请耐心等待...', 'loading');
+=======
+                            // 检查processing状态保持时间，如果超过2分钟且轮询次数超过20次，尝试手动检查AI结果
+                            if (attempts > 20) {
+                                showStatus('处理中，正在持续尝试获取结果...', 'loading');
+                                
+                                // 如果状态停滞超过一定时间，可以尝试手动检查一下是否有结果
+                                if (attempts % 10 === 0 && attempts >= 20) {
+                                    console.log('状态长时间为processing，尝试恢复任务');
+                                    
+                                    // 调用恢复接口
+                                    try {
+                                        const recoverResponse = await fetch(`https://ghibli-image-transformer.onecuber1.workers.dev/api/transform/recover/${taskId}`);
+                                        if (recoverResponse.ok) {
+                                            const recoverData = await recoverResponse.json();
+                                            console.log('恢复任务响应:', recoverData);
+                                            
+                                            if (recoverData.status === 'recovering') {
+                                                showStatus('正在尝试恢复任务，请继续等待...', 'loading');
+                                            }
+                                        }
+                                    } catch (recoverError) {
+                                        console.error('调用恢复接口失败:', recoverError);
+                                    }
+                                }
+                            } else {
+                                showStatus('正在处理图片...', 'loading');
+                            }
+>>>>>>> parent of 740761e (Update index.html)
                             scheduleNextCheck();
                             break;
                             
                         case 'completed':
+<<<<<<< HEAD
                             showStatus('处理完成！', 'success');
                             
                             if (data.originalContent) {
@@ -1151,18 +1250,29 @@
                                                          <p style="display: none;">图片加载失败，但处理已完成</p>`;
                             } else {
                                 resultPreview.innerHTML = `<p>处理完成，但未生成结果图片</p>`;
+=======
+                            if (!data.resultUrl) {
+                                console.error('任务完成但缺少resultUrl:', data);
+                                showStatus('处理完成，但未找到图片链接', 'error');
+                                uploadBtn.disabled = false;
+                                break;
+>>>>>>> parent of 740761e (Update index.html)
                             }
                             
                             uploadBtn.disabled = false;
+<<<<<<< HEAD
                             
                             // 移除手动检查按钮
                             const manualBtn = document.getElementById('manual-check-btn');
                             if (manualBtn) manualBtn.remove();
+=======
+>>>>>>> parent of 740761e (Update index.html)
                             break;
                             
                         case 'failed':
                             showStatus(`处理失败: ${data.error || '未知错误'}`, 'error');
                             uploadBtn.disabled = false;
+<<<<<<< HEAD
                             
                             // 移除手动检查按钮
                             const manualBtn2 = document.getElementById('manual-check-btn');
@@ -1172,14 +1282,32 @@
                         default:
                             console.warn('未知状态:', data.status);
                             scheduleNextCheck();
+=======
+                            break;
+                            
+                        default:
+                            console.warn('未知任务状态:', data.status);
+                            showStatus('未知任务状态', 'error');
+                            uploadBtn.disabled = false;
+>>>>>>> parent of 740761e (Update index.html)
                     }
                     
                 } catch (error) {
+<<<<<<< HEAD
                     console.error('检查状态时出错:', error);
                     
                     // 如果是网络错误或超时，继续轮询
                     if (attempts < maxAttempts && (error.message.includes('超时') || error.message.includes('网络'))) {
                         showStatus('网络不稳定，继续尝试检查状态...', 'loading');
+=======
+                    console.error('轮询过程出错:', error);
+                    // 轮询错误次数过多时才停止，使系统更健壮
+                    if (errorCount >= 5) {
+                        showStatus(`轮询失败: ${error.message}`, 'error');
+                        uploadBtn.disabled = false;
+                    } else {
+                        // 出错时仍继续轮询
+>>>>>>> parent of 740761e (Update index.html)
                         scheduleNextCheck();
                         return;
                     }
@@ -1194,11 +1322,21 @@
             const scheduleNextCheck = () => {
                 attempts++;
                 if (attempts < maxAttempts) {
+<<<<<<< HEAD
                     pollTimer = setTimeout(checkStatus, pollInterval);
+=======
+                    // 使用递增的间隔（从3秒增加到最多10秒）
+                    const adaptiveInterval = Math.min(pollInterval * (1 + attempts/10), 10000);
+                    console.log(`计划${adaptiveInterval/1000}秒后进行下一次检查`);
+                    pollTimer = setTimeout(checkStatus, adaptiveInterval);
+>>>>>>> parent of 740761e (Update index.html)
                 } else {
                     showStatus('检查超时，请手动检查任务状态', 'error');
                     uploadBtn.disabled = false;
+<<<<<<< HEAD
                     createManualCheckButton();
+=======
+>>>>>>> parent of 740761e (Update index.html)
                 }
             };
             
